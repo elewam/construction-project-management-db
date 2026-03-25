@@ -1,0 +1,446 @@
+📋 Complete Forms & Reports Guide for Construction Database
+I'll provide you with Form and Report design specifications that you can create in Access. Here are all the essential ones:
+
+SECTION 1: FORMS
+1. FORM: Projects Entry Form
+Name: frmProjects Purpose: Add/edit projects
+
+Fields to Include:
+
+ProjectName (Text)
+BuildingAddress (Text)
+City (Text)
+State (Combo - linked to lookup)
+ZipCode (Text)
+ClientOrgID (Combo - Organizations table)
+ProjectStatus (Combo - Lookup table)
+StartDate (Date)
+EndDate (Date)
+BudgetAmount (Currency)
+ProjectManager (Text)
+TotalUnits (Number)
+Notes (Memo)
+VBA Code for Form:
+
+VBA
+Private Sub Form_Load()
+    ' Format form
+    Me.BackColor = RGB(240, 240, 240)
+End Sub
+
+Private Sub ProjectStatus_Change()
+    ' Update when status changes
+    Me.Dirty = False
+End Sub
+
+Private Sub Form_BeforeUpdate(Cancel As Integer)
+    ' Validate before saving
+    If IsNull(Me.ProjectName) Then
+        MsgBox "Project name is required!", vbCritical
+        Cancel = True
+    ElseIf Me.EndDate < Me.StartDate Then
+        MsgBox "End date must be after start date!", vbCritical
+        Cancel = True
+    End If
+End Sub
+2. FORM: Organizations Entry Form
+Name: frmOrganizations Purpose: Manage clients, vendors, suppliers
+
+Fields:
+
+OrgName (Text)
+OrgType (Combo: Client, Vendor, Supplier, Contractor)
+ContactPerson (Text)
+Email (Text)
+Phone (Text)
+Address (Text)
+City, State, ZipCode, Country (Text)
+PaymentTerms (Text)
+Rating (Number - 1-5)
+Notes (Memo)
+VBA
+Private Sub OrgType_AfterUpdate()
+    ' Update form based on org type
+    Select Case Me.OrgType
+        Case "Client"
+            Me.Label1.Caption = "Client Details"
+        Case "Vendor"
+            Me.Label1.Caption = "Vendor Details"
+        Case "Supplier"
+            Me.Label1.Caption = "Supplier Details"
+    End Select
+End Sub
+3. FORM: Apartment Units Form
+Name: frmApartmentUnits Purpose: Manage apartment units and sales
+
+Fields:
+
+ProjectID (Combo - Projects)
+UnitNumber (Text)
+UnitType (Combo: Studio, 1BR, 2BR, 3BR)
+SquareFootage (Number)
+ConstructionStatus (Combo - Lookup)
+SalesStatus (Combo - Available, Pre-Sold, Sold)
+PreSalePrice (Currency)
+ListPrice (Currency)
+BuyerName (Text)
+BuyerEmail (Text)
+SaleDate (Date)
+VBA
+Private Sub SalesStatus_AfterUpdate()
+    If Me.SalesStatus = "Sold" Then
+        Me.SaleDate.SetFocus
+        If IsNull(Me.SaleDate) Then Me.SaleDate = Date
+    End If
+End Sub
+
+Private Sub Form_BeforeUpdate(Cancel As Integer)
+    If Me.ListPrice < Me.PreSalePrice Then
+        MsgBox "List price should be >= pre-sale price!", vbCritical
+        Cancel = True
+    End If
+End Sub
+4. FORM: Time Tracking Form
+Name: frmTimeTracking Purpose: Log and track employee time
+
+Fields:
+
+AssignmentID (Combo - ProjectResources)
+WorkDate (Date)
+HoursWorked (Number)
+Notes (Memo)
+Status (Combo: Draft, Submitted, Approved)
+EnteredBy (Text - Auto)
+ApprovedBy (Text - Admin only)
+VBA
+Private Sub Form_Load()
+    Me.WorkDate = Date
+    Me.EnteredBy = Environ("USERNAME")
+End Sub
+
+Private Sub cmdLogTime_Click()
+    If IsNull(Me.HoursWorked) Or Me.HoursWorked = 0 Then
+        MsgBox "Hours worked is required!", vbCritical
+        Exit Sub
+    End If
+    
+    Me.Dirty = False
+    MsgBox "Time entry saved!", vbInformation
+    DoCmd.GoToRecord , , acNewRec
+End Sub
+
+Private Sub Status_AfterUpdate()
+    If Me.Status = "Submitted" Then
+        MsgBox "Waiting for approval...", vbInformation
+    End If
+End Sub
+5. FORM: Line Items Form
+Name: frmLineItems Purpose: Manage project costs and line items
+
+Fields:
+
+ProjectID (Combo)
+LineDescription (Text)
+CostCategory (Combo)
+VendorOrgID (Combo)
+BudgetAmount (Currency)
+ActualCost (Currency - Read-only)
+Quantity (Number)
+UnitPrice (Currency)
+Status (Combo)
+PercentComplete (Number - 0-100)
+VBA
+Private Sub Quantity_AfterUpdate()
+    CalculateCost
+End Sub
+
+Private Sub UnitPrice_AfterUpdate()
+    CalculateCost
+End Sub
+
+Private Sub CalculateCost()
+    If Not IsNull(Me.Quantity) And Not IsNull(Me.UnitPrice) Then
+        Me.ActualCost = Me.Quantity * Me.UnitPrice
+    End If
+End Sub
+
+Private Sub Form_BeforeUpdate(Cancel As Integer)
+    If Me.ActualCost > Me.BudgetAmount Then
+        If MsgBox("Actual cost exceeds budget. Continue?", vbQuestion + vbYesNo) = vbNo Then
+            Cancel = True
+        End If
+    End If
+End Sub
+6. FORM: Resources/Staff Form
+Name: frmResources Purpose: Manage workforce and resources
+
+Fields:
+
+OrgID (Combo)
+ResourceName (Text)
+ResourceType (Combo)
+Role (Combo - Lookup)
+HourlyRate (Currency)
+Availability (Number - %)
+Status (Combo: Active, Inactive)
+VBA
+Private Sub HourlyRate_AfterUpdate()
+    If Me.HourlyRate < 0 Then
+        MsgBox "Hourly rate cannot be negative!", vbCritical
+        Me.HourlyRate.Undo
+    End If
+End Sub
+
+Private Sub Status_AfterUpdate()
+    If Me.Status = "Inactive" Then
+        Me.Availability = 0
+    End If
+End Sub
+7. FORM: Project Dashboard Form
+Name: frmProjectDashboard Purpose: Project overview and KPIs
+
+Controls:
+
+List box showing active projects
+Text boxes for:
+Total Projects
+Active Projects
+Overdue Projects
+Total Budget
+Total Actual Cost
+Budget Variance
+Average Completion %
+VBA
+Private Sub Form_Load()
+    RefreshDashboard
+End Sub
+
+Sub RefreshDashboard()
+    Dim db As Database
+    Dim rs As Recordset
+    Set db = CurrentDb
+    
+    ' Total projects
+    Set rs = db.OpenRecordset("SELECT COUNT(*) as cnt FROM Projects")
+    Me.txtTotalProjects = rs!cnt
+    rs.Close
+    
+    ' Active projects
+    Set rs = db.OpenRecordset("SELECT COUNT(*) as cnt FROM Projects WHERE ProjectStatus='Active'")
+    Me.txtActiveProjects = rs!cnt
+    rs.Close
+    
+    ' Overdue projects
+    Set rs = db.OpenRecordset("SELECT COUNT(*) as cnt FROM Projects WHERE EndDate < NOW() AND ProjectStatus<>'Completed'")
+    Me.txtOverdueProjects = rs!cnt
+    rs.Close
+    
+    ' Financial summary
+    Set rs = db.OpenRecordset("SELECT SUM(BudgetAmount) as budget, SUM(ActualCost) as actual FROM Projects")
+    Me.txtTotalBudget = rs!budget
+    Me.txtTotalActual = rs!actual
+    Me.txtVariance = rs!budget - rs!actual
+    rs.Close
+    
+    Set rs = Nothing
+    Set db = Nothing
+End Sub
+
+Private Sub cmdRefresh_Click()
+    RefreshDashboard
+    MsgBox "Dashboard refreshed!", vbInformation
+End Sub
+8. FORM: Payables Form
+Name: frmPayables Purpose: Track vendor invoices and payments
+
+Fields:
+
+VendorOrgID (Combo)
+InvoiceNumber (Text)
+InvoiceDate (Date)
+DueDate (Date)
+Amount (Currency)
+Status (Combo: Pending, Approved, Paid)
+PaidDate (Date)
+VBA
+Private Sub Status_AfterUpdate()
+    If Me.Status = "Paid" Then
+        Me.PaidDate = Date
+    ElseIf Me.Status <> "Paid" Then
+        Me.PaidDate = Null
+    End If
+End Sub
+
+Private Sub Form_BeforeUpdate(Cancel As Integer)
+    If DueDate < InvoiceDate Then
+        MsgBox "Due date must be after invoice date!", vbCritical
+        Cancel = True
+    End If
+End Sub
+9. FORM: Receivables Form
+Name: frmReceivables Purpose: Track customer invoices
+
+Fields:
+
+ProjectID (Combo)
+UnitID (Combo)
+BuyerName (Text)
+InvoiceNumber (Text)
+Amount (Currency)
+AmountPaid (Currency)
+Status (Combo)
+DueDate (Date)
+VBA
+Private Sub AmountPaid_AfterUpdate()
+    Dim Outstanding As Currency
+    Outstanding = Me.Amount - Me.AmountPaid
+    
+    If Outstanding = 0 Then
+        Me.Status = "Paid"
+    ElseIf Me.AmountPaid > 0 Then
+        Me.Status = "Partial"
+    Else
+        Me.Status = "Sent"
+    End If
+    
+    Me.txtOutstanding = Outstanding
+End Sub
+SECTION 2: REPORTS
+1. REPORT: Project Summary Report
+Name: rptProjectSummary Purpose: Overview of all projects
+
+Sections:
+
+Report Header: Title, Date range
+Page Header: Column headers
+Detail: Project data (Name, Status, Budget, Actual, %Complete)
+Page Footer: Page numbers
+Report Footer: Totals
+VBA
+Private Sub Report_Load()
+    Me.txtReportDate = "As of " & Format(Date, "mmmm dd, yyyy")
+End Sub
+2. REPORT: Budget vs Actual Report
+Name: rptBudgetVsActual Purpose: Compare budgeted vs actual costs
+
+Data:
+
+Project Name
+Budget Amount
+Actual Cost
+Variance (Budget - Actual)
+Variance %
+Status (Over/Under)
+Sorting: By Variance (descending)
+
+3. REPORT: Project Milestone Report
+Name: rptProjectMilestones Purpose: Track project milestones
+
+Fields:
+
+Project Name
+Milestone Name
+Planned Date
+Actual Date
+Status
+% Complete
+Days Ahead/Behind
+4. REPORT: Apartment Inventory Report
+Name: rptApartmentInventory Purpose: Sales and construction status
+
+Group By: Project Fields:
+
+Unit Number
+Unit Type
+Square Footage
+Construction Status
+Sales Status
+Price
+Buyer (if sold)
+Sale Date
+Summary: Count of units by status
+
+5. REPORT: Time Tracking Report
+Name: rptTimeTracking Purpose: Employee time summary
+
+Group By: Resource, Project Fields:
+
+Work Date
+Hours Worked
+Hourly Rate
+Total Cost
+Status
+Totals: Hours per resource, Total cost
+
+6. REPORT: Resource Utilization Report
+Name: rptResourceUtilization Purpose: Resource allocation analysis
+
+Fields:
+
+Resource Name
+Role
+Total Planned Hours
+Actual Hours
+Utilization %
+Availability
+Status
+Sorting: By Utilization (descending)
+
+7. REPORT: Financial Report
+Name: rptFinancialSummary Purpose: Complete financial overview
+
+Sections:
+
+Revenue Summary (Receivables)
+Expense Summary (Payables, LineItems)
+Profit/Loss
+Outstanding Amounts
+8. REPORT: Payables Aging Report
+Name: rptPayablesAging Purpose: Vendor invoice aging
+
+Group By: Vendor Categories:
+
+Current (Due within 30 days)
+30-60 days overdue
+60-90 days overdue
+90+ days overdue
+Totals: Aging by category
+
+9. REPORT: Sales Performance Report
+Name: rptSalesPerformance Purpose: Salesman performance metrics
+
+Fields:
+
+Salesman Name
+Units Shown
+Units Presented
+Units Sold
+Conversion Rate
+Total Sales Value
+Commission
+Sorting: By Commission (descending)
+
+10. REPORT: Supplier Performance Report
+Name: rptSupplierPerformance Purpose: Vendor quality metrics
+
+Fields:
+
+Supplier Name
+Total Orders
+On-Time Deliveries
+Late Deliveries
+On-Time Rate
+Quality Issues
+Quality Rating
+How to Create Forms in Access:
+Click Design → Form Design
+Add controls (Text boxes, Combo boxes, etc.)
+Set Data Source to respective table
+Add VBA code from above
+Format and style as needed
+How to Create Reports:
+Click Report → Report Design
+Add fields from query/table
+Group and sort as needed
+Add calculations in footers
+Format professionally
